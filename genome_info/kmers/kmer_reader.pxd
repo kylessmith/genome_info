@@ -1,8 +1,10 @@
 import numpy as np
 cimport numpy as np
+np.import_array()
 cimport cython
 from libc.stdint cimport uint32_t, int32_t, int64_t, uint16_t
 from ailist.LabeledIntervalArray_core cimport LabeledIntervalArray, labeled_aiarray_t
+from ailist.array_query_core cimport pointer_to_numpy_array
 
 
 cdef extern from "interval_kmer.c":
@@ -131,9 +133,11 @@ cdef extern from "interval_kmer.h":
     int fetch_kmer(kmer_count_t *kc, char *seq) nogil
     kmer_count_t *interval_kmer_count(labeled_aiarray_t *laia, char *fname, int kmer, int last_n) nogil
     char *fetch_sequence(char *fname, char *name, int start, int end) nogil
+    void fetch_sequence_code(char *fname, char *name, int start, int end, int *seq_code) nogil
     void gc_content(labeled_aiarray_t *laia, char *fname, float gc[]) nogil
 
 
 cdef kmer_count_t *_read_kmers(char *fname, labeled_aiarray_t *laia, int k, int last_n)
 cdef bytes _fetch_sequence(char *fname, char *name, int start, int end)
+cdef void _fetch_sequence_code(char *fname, char *name, int start, int end, int[::1] seq_code)
 cdef void _gc_percent(char *fname, labeled_aiarray_t *laia, float[::1] gc)

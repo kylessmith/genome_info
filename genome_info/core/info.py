@@ -5,10 +5,11 @@ from os.path import join
 from typing import List, Any, Dict
 from ailist import LabeledIntervalArray
 from intervalframe import IntervalFrame
+from tqdm import tqdm
 
 # Local imports
 from ..genomes.genomes import InfoReader
-from ..kmers.kmer_reader import read_kmers, read_sequence, gc_percent
+from ..kmers.kmer_reader import read_kmers, read_sequence, read_sequence_code, read_sequence_code_intervals, gc_percent
 from .utilities import adjust_bounds
 
 
@@ -100,6 +101,59 @@ class GenomeInfo(object):
         sequence = read_sequence(self.seq_file, chromosome, start, end)
 
         return sequence
+    
+
+    def sequence_code(self,
+                        chromosome: str,
+                        start: int,
+                        end: int) -> str:
+        """
+        Get sequence
+
+        Parameters
+        ----------
+            chromosome : str
+                Chromosome name
+            start : int
+                Start position
+            end : int
+                End position
+
+        Returns
+        -------
+            sequence : str
+        """
+
+        # Get sequence
+        sequence = read_sequence_code(self.seq_file, chromosome, start, end)
+
+        return sequence
+    
+
+    def sequence_code_intervals(self,
+                                intervals: LabeledIntervalArray,
+                                max_length: int = 1000) -> np.ndarray:
+        """
+        Get sequence
+
+        Parameters
+        ----------
+            chromosome : str
+                Chromosome name
+            start : int
+                Start position
+            end : int
+                End position
+
+        Returns
+        -------
+            sequence : str
+        """
+
+        # Get sequence
+        sequence = read_sequence_code_intervals(self.seq_file, intervals, max_length)
+
+        return sequence
 
     
     def interval_kmers(self,
@@ -163,7 +217,9 @@ class GenomeInfo(object):
         return kmers
 
 
-    def load_pfm_scanner(self):
+    def load_pfm_scanner(self,
+                         pvalue: float = 5e-05,
+                         pseudocounts = 0.0001) -> None:
         """
         Load PFM scanner
 
@@ -182,14 +238,26 @@ class GenomeInfo(object):
 
         # Get PFM scanner
         pfms = self["pfm"]
+        n_motifs = len(pfms[0])
         bg = MOODS.tools.flat_bg(4)
-        pvalue = 0.0001
-        thresholds = [MOODS.tools.threshold_from_p(m, bg, pvalue) for m in pfms[1]]
+
+        # Create matrices
+        matrices = [None] * 2 * n_motifs
+        thresholds = [None] * 2 * n_motifs
+        for i, motif in enumerate(pfms[1]):
+            #matrices[i] = MOODS.parsers.pfm_to_log_odds(motif, bg, pseudocounts)
+            matrices[i] = motif
+            matrices[i+n_motifs] = MOODS.tools.reverse_complement(matrices[i])
+
+            thresholds[i] = MOODS.tools.threshold_from_p(motif, bg, pvalue)
+            thresholds[i+n_motifs] = thresholds[i]
         
         # Create scanner
         self.pfm_scanner = MOODS.scan.Scanner(7)
-        self.pfm_scanner.set_motifs(pfms[1], bg, thresholds, )
-        self.pfm_names = pfms[0]
+        self.pfm_scanner.set_motifs(matrices = matrices,
+                                    bg = bg,
+                                    thresholds = thresholds)
+        self.pfm_names = pfms[0] + pfms[0]
 
         return None
     
@@ -229,6 +297,95 @@ class GenomeInfo(object):
 
         return pfm_results
     
+
+    def _motif_match(self,
+                    intervals: LabeledIntervalArray) -> IntervalFrame:
+        """
+        Match motifs to intervals
+
+        Parameters
+        ----------
+            intervals : LabeledIntervalArray
+                Intervals to match
+
+        Returns
+        -------
+            motif_matches : IntervalFrame
+                Motif matches
+        """
+
+        # Load scanner
+        if self.pfm_scanner is None:
+            self.load_pfm_scanner()
+
+        # Match motifs
+        names = pd.unique(np.array(self.pfm_names))
+        n_motifs = len(names)
+        motif_matches = pd.DataFrame(np.zeros((len(intervals), n_motifs),
+                                              dtype = np.uint8),
+                                     columns = names)
+
+        for i, interval in enumerate(intervals):
+            sequence = self.sequence(interval.label, interval.start, interval.end)
+            results = self.pfm_scan(sequence)
+            for motif in results:
+                motif_matches.loc[i, motif] = 1
+
+        # Convert to IntervalFrame
+        iframe = IntervalFrame(intervals = intervals, df = motif_matches)
+        
+        return iframe
+    
+
+    def motif_match(self,
+                    intervals: LabeledIntervalArray,
+                    n_jobs: int = 1) -> IntervalFrame:
+        """
+        Match motifs to intervals
+
+        Parameters
+        ----------
+            intervals : LabeledIntervalArray
+                Intervals to match
+            n_jobs : int
+                Number of jobs
+
+        Returns
+        -------
+            motif_matches : IntervalFrame
+                Motif matches
+        """
+
+        # Set scanner
+        self.pfm_scanner = None
+
+        if n_jobs == 1:
+            iframe = self._motif_match(intervals)
+        else:
+            import math
+            from joblib import Parallel, delayed
+
+            def process_interval_chunk(intervals, g):
+                m = self._motif_match(intervals)
+                
+                return m
+            
+            def chunkify(data, n_jobs):
+                """Split data into chunks based on the number of jobs."""
+                chunk_size = math.ceil(len(data) / n_jobs)
+                for i in range(0, len(data), chunk_size):
+                    yield data[i:i + chunk_size]
+
+            interval_chunks = chunkify(intervals, n_jobs)
+            results = Parallel(n_jobs=n_jobs)(
+                delayed(process_interval_chunk)(chunk, self) for chunk in interval_chunks
+            )
+
+            r = results[0]
+            iframe = r.concat(results[1:])
+
+        return iframe
+
 
     def get_intervals(self,
                         key: str,

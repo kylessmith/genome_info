@@ -1096,6 +1096,73 @@ char *fetch_sequence(char *fname, char *name, int start, int end)
 }
 
 
+int base2code(char base)
+{
+    int code = -1;
+    if (base == 'A' || base == 'a')
+    {
+        code = 0;
+    }
+    else if (base == 'T' || base == 't')
+    {
+        code = 1;
+    }
+    else if (base == 'G' || base == 'g')
+    {
+        code = 2;
+    }
+    else if (base == 'C' || base == 'c')
+    {
+        code = 3;
+    }
+
+    return code;
+}
+
+
+void fetch_sequence_code(char *fname, char *name, int start, int end, int *seq_code)
+{
+    // Open 2bit file
+    TwoBit *tb = twobitOpen(fname, 0);
+
+    // Fetch sequence
+    char *seq = twobitSequence(tb, name, start, end);
+
+    // Convert sequence to code
+    int seq_length = strlen(seq);
+    int i;
+    for (i = 0; i < seq_length; i++)
+    {
+        switch (*(seq + i))
+        {
+            case 'A':
+            case 'a':
+                seq_code[i] = 0;
+                break;
+            case 'T':
+            case 't':
+                seq_code[i] = 1;
+                break;
+            case 'G':
+            case 'g':
+                seq_code[i] = 2;
+                break;
+            case 'C':
+            case 'c':
+                seq_code[i] = 3;
+                break;
+            default:
+                seq_code[i] = -1;
+        }
+    }
+
+    // Close 2bit file
+    twobitClose(tb);
+
+    return;
+}
+
+
 void gc_content(labeled_aiarray_t *laia, char *fname, float gc[])
 {
     TwoBit *tb = twobitOpen(fname, 0);

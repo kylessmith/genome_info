@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "genome_info"
-version = "1.0.5"
+version = "1.0.8"
 description = "Python package genome annotations"
 authors = ["Kyle S. Smith <kyle.smith@stjude.org>"]
 maintainers = ["Kyle S. Smith <kyle.smith@stjude.org>"]
@@ -28,8 +28,8 @@ packages = [{ include = "genome_info" }]
 include = ["genome_info/kmers/*.pyx", "genome_info/kmers/*.pxd", "genome_info/kmers/*.h", "genome_info/kmers/*.c", "genome_info/**/*.so"]
 
 [tool.poetry.dependencies]
-python = "^3.10"
-numpy = "^1.23.5"
+python = ">=3.10"
+numpy = ">=1.23.5"
 cython = "^3.0.0"
 pandas = "^2.0.0"
 intervalframe = "^1.1.6"

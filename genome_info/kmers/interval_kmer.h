@@ -135,6 +135,7 @@ void append_kmers(kmer_count_t *kc, int kmer, char *seq);
 int fetch_kmer(kmer_count_t *kc, char *seq);
 kmer_count_t *interval_kmer_count(labeled_aiarray_t *laia, char *fname, int kmer, int last_n);
 char *fetch_sequence(char *fname, char *name, int start, int end);
+void fetch_sequence_code(char *fname, char *name, int start, int end, int *seq_code);
 void gc_content(labeled_aiarray_t *laia, char *fname, float gc[]);
 
 #endif

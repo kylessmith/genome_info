@@ -4,9 +4,11 @@
 import pandas as pd
 import numpy as np
 cimport numpy as np
+np.import_array()
 
 from libc.stdint cimport uint32_t, int32_t, int64_t, uint16_t
 from ailist.LabeledIntervalArray_core cimport LabeledIntervalArray, labeled_aiarray_t
+from ailist.array_query_core cimport pointer_to_numpy_array
 from ..genomes.genomes import InfoReader
 
 
@@ -53,6 +55,43 @@ def read_sequence(str seq_fn, str chrom, int start, int end):
     cdef str py_seq = seq.decode()
 
     return py_seq
+
+
+cdef void _fetch_sequence_code(char *fname, char *name, int start, int end, int[::1] seq_code):
+    fetch_sequence_code(fname, name, start, end, &seq_code[0])
+
+    return 
+
+
+def read_sequence_code(str seq_fn, str chrom, int start, int end):
+    
+    cdef str twobit_name = seq_fn
+    cdef bytes fname = twobit_name.encode()
+    cdef bytes name = chrom.encode()
+
+    cdef np.ndarray seq_arr = np.zeros(end - start, dtype=np.int32)
+    cdef int[::1] seq_code = seq_arr
+    _fetch_sequence_code(fname, name, start, end, seq_code)
+
+    return seq_arr
+
+
+def read_sequence_code_intervals(str seq_fn, LabeledIntervalArray laia, int max_len = 1000):
+    
+    cdef str twobit_name = seq_fn
+    cdef bytes fname = twobit_name.encode()
+
+    cdef np.ndarray seq_arr = np.zeros((laia.size, max_len), dtype=np.int8)
+    seq_arr[:, :] = -1
+
+    cdef int i
+    for i in range(laia.size):
+        interval = laia[i]
+        arr = read_sequence_code(seq_fn, interval.label, interval.start, interval.end)
+        arr = arr.astype(np.int8)
+        seq_arr[i, :len(arr)] = arr
+
+    return seq_arr
 
 
 cdef void _gc_percent(char *fname, labeled_aiarray_t *laia, float[::1] gc):
